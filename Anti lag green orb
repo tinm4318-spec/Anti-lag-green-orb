@@ -1,0 +1,184 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+
+local LP = Players.LocalPlayer
+
+local enabled = true
+local removedCount = 0
+local scanConn = nil
+
+local function getGuiParent()
+    local ok, cg = pcall(function() return CoreGui end)
+    if ok and cg then return cg end
+    return LP:WaitForChild("PlayerGui")
+end
+
+local function getBricksFolder()
+    return workspace:FindFirstChild("Bricks")
+end
+
+local function purgeMeshFromField(field)
+    if not field or not field:IsA("Instance") then return 0 end
+    local n = 0
+    for _, child in ipairs(field:GetChildren()) do
+        if child.Name == "Mesh" then
+            child:Destroy()
+            n = n + 1
+        end
+    end
+    return n
+end
+
+local function scanOnce()
+    local bricks = getBricksFolder()
+    if not bricks then return 0 end
+    local total = 0
+    for _, playerFolder in ipairs(bricks:GetChildren()) do
+        for _, brick in ipairs(playerFolder:GetChildren()) do
+            local field = brick:FindFirstChild("Field")
+            if field then
+                total = total + purgeMeshFromField(field)
+            end
+        end
+    end
+    return total
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "FieldMeshCleaner"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = getGuiParent()
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.fromOffset(220, 110)
+frame.Position = UDim2.new(0, 20, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(55, 55, 55)
+stroke.Thickness = 1
+stroke.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -20, 0, 20)
+title.Position = UDim2.fromOffset(10, 6)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.TextColor3 = Color3.fromRGB(240, 240, 240)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Text = "Field Mesh Cleaner"
+title.Parent = frame
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(1, -20, 0, 34)
+toggleBtn.Position = UDim2.fromOffset(10, 30)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 90, 50)
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 13
+toggleBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+toggleBtn.Text = "ON"
+toggleBtn.AutoButtonColor = false
+toggleBtn.Parent = frame
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
+
+local countLabel = Instance.new("TextLabel")
+countLabel.Size = UDim2.new(1, -20, 0, 18)
+countLabel.Position = UDim2.fromOffset(10, 70)
+countLabel.BackgroundTransparency = 1
+countLabel.Font = Enum.Font.GothamMedium
+countLabel.TextSize = 11
+countLabel.TextColor3 = Color3.fromRGB(150, 150, 155)
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.Text = "removed: 0"
+countLabel.Parent = frame
+
+local hint = Instance.new("TextLabel")
+hint.Size = UDim2.new(1, -20, 0, 14)
+hint.Position = UDim2.fromOffset(10, 88)
+hint.BackgroundTransparency = 1
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 9
+hint.TextColor3 = Color3.fromRGB(100, 100, 105)
+hint.TextXAlignment = Enum.TextXAlignment.Left
+hint.Text = "scanning Bricks/*/Brick/Field/Mesh"
+hint.Parent = frame
+
+local function refreshToggleVisual()
+    if enabled then
+        toggleBtn.Text = "ON"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 90, 50)
+    else
+        toggleBtn.Text = "OFF"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(70, 30, 30)
+    end
+    countLabel.Text = "removed: " .. removedCount
+end
+
+local function startScan()
+    if scanConn then return end
+    scanConn = RunService.Heartbeat:Connect(function()
+        if not enabled then return end
+        local n = scanOnce()
+        if n > 0 then
+            removedCount = removedCount + n
+            countLabel.Text = "removed: " .. removedCount
+        end
+    end)
+end
+
+local function stopScan()
+    if scanConn then
+        scanConn:Disconnect()
+        scanConn = nil
+    end
+end
+
+toggleBtn.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    refreshToggleVisual()
+    if enabled then
+        startScan()
+    else
+        stopScan()
+    end
+end)
+
+do
+    local dragging, dragStart, startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+refreshToggleVisual()
+startScan()
