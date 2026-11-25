@@ -5,7 +5,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local LP = Players.LocalPlayer
 
-local enabled = true
+local enabled = false
 local removedCount = 0
 local scanConn = nil
 
