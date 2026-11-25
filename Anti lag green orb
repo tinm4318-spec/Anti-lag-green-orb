@@ -71,12 +71,12 @@ title.Parent = frame
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(1, -20, 0, 32)
 toggleBtn.Position = UDim2.fromOffset(10, 32)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 90, 50)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(70, 30, 30)
 toggleBtn.BorderSizePixel = 0
 toggleBtn.Font = Enum.Font.GothamBold
 toggleBtn.TextSize = 13
 toggleBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
-toggleBtn.Text = "ON"
+toggleBtn.Text = "OFF"
 toggleBtn.AutoButtonColor = false
 toggleBtn.Parent = frame
 Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
@@ -160,4 +160,4 @@ do
 end
 
 refreshToggleVisual()
-startScan()
+-- 不调用 startScan(),默认关闭
