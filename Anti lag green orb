@@ -1,5 +1,4 @@
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 
@@ -7,33 +6,12 @@ local LP = Players.LocalPlayer
 
 local enabled = false
 local removedCount = 0
-local scanConn = nil
+local conns = {}
 
 local function getGuiParent()
     local ok, cg = pcall(function() return CoreGui end)
     if ok and cg then return cg end
     return LP:WaitForChild("PlayerGui")
-end
-
-local function purgeFieldFromBrick(brick)
-    local field = brick:FindFirstChild("Field")
-    if field then
-        field:Destroy()
-        return 1
-    end
-    return 0
-end
-
-local function scanOnce()
-    local bricks = workspace:FindFirstChild("Bricks")
-    if not bricks then return 0 end
-    local total = 0
-    for _, playerFolder in ipairs(bricks:GetChildren()) do
-        for _, brick in ipairs(playerFolder:GetChildren()) do
-            total = total + purgeFieldFromBrick(brick)
-        end
-    end
-    return total
 end
 
 local gui = Instance.new("ScreenGui")
@@ -103,23 +81,76 @@ local function refreshToggleVisual()
     countLabel.Text = "removed: " .. removedCount
 end
 
-local function startScan()
-    if scanConn then return end
-    scanConn = RunService.Heartbeat:Connect(function()
-        if not enabled then return end
-        local n = scanOnce()
-        if n > 0 then
-            removedCount = removedCount + n
-            countLabel.Text = "removed: " .. removedCount
+local function bumpCount()
+    removedCount = removedCount + 1
+    countLabel.Text = "removed: " .. removedCount
+end
+
+local function killField(field)
+    if field and field.Parent then
+        field:Destroy()
+        bumpCount()
+    end
+end
+
+local function purgeDeep(root)
+    for _, d in ipairs(root:GetDescendants()) do
+        if d.Name == "Field" then
+            killField(d)
         end
-    end)
+    end
+end
+
+local function watchBrick(brick)
+    if not brick or not brick:IsA("Instance") then return end
+    if not brick:IsDescendantOf(workspace) then return end
+    purgeDeep(brick)
+    table.insert(conns, brick.DescendantAdded:Connect(function(c)
+        if not enabled then return end
+        if c.Name == "Field" then
+            task.defer(killField, c)
+        end
+    end))
+end
+
+local function watchPlayerFolder(folder)
+    if not folder then return end
+    for _, brick in ipairs(folder:GetChildren()) do
+        watchBrick(brick)
+    end
+    table.insert(conns, folder.ChildAdded:Connect(function(b)
+        if not enabled then return end
+        if b:IsA("Instance") then
+            watchBrick(b)
+        end
+    end))
+end
+
+local function startScan()
+    if not enabled then return end
+    local bricks = workspace:FindFirstChild("Bricks")
+    if not bricks then
+        table.insert(conns, workspace.ChildAdded:Connect(function(c)
+            if c.Name == "Bricks" and enabled then
+                startScan()
+            end
+        end))
+        return
+    end
+    for _, folder in ipairs(bricks:GetChildren()) do
+        watchPlayerFolder(folder)
+    end
+    table.insert(conns, bricks.ChildAdded:Connect(function(f)
+        if not enabled then return end
+        watchPlayerFolder(f)
+    end))
 end
 
 local function stopScan()
-    if scanConn then
-        scanConn:Disconnect()
-        scanConn = nil
+    for _, c in ipairs(conns) do
+        pcall(function() c:Disconnect() end)
     end
+    conns = {}
 end
 
 toggleBtn.MouseButton1Click:Connect(function()
@@ -160,4 +191,4 @@ do
 end
 
 refreshToggleVisual()
-print("I cracked Lucia")
+print("I cracked Lucia every day")
