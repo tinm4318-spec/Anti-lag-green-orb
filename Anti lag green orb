@@ -160,4 +160,4 @@ do
 end
 
 refreshToggleVisual()
--- 不调用 startScan(),默认关闭
+print(I cracked Lucia)
