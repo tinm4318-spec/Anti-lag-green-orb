@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -18,7 +19,11 @@ local function getGuiParent()
     local ok, cg = pcall(function()
         return CoreGui
     end)
-    if ok and cg then return cg end
+
+    if ok and cg then
+        return cg
+    end
+
     return LP:WaitForChild("PlayerGui")
 end
 
@@ -124,29 +129,38 @@ local function watchBrick(brick)
     purgeDeep(brick)
 
     table.insert(conns, brick.DescendantAdded:Connect(function(c)
-        if not enabled then return end
+        if not enabled then
+            return
+        end
 
         if TARGETS[c.Name] then
-            task.defer(killField, c)
+            killField(c)
         end
     end))
 end
 
 local function watchPlayerFolder(folder)
-    if not folder then return end
+    if not folder then
+        return
+    end
 
     for _, brick in ipairs(folder:GetChildren()) do
         watchBrick(brick)
     end
 
     table.insert(conns, folder.ChildAdded:Connect(function(b)
-        if not enabled then return end
+        if not enabled then
+            return
+        end
+
         watchBrick(b)
     end))
 end
 
 local function startScan()
-    if not enabled then return end
+    if not enabled then
+        return
+    end
 
     local bricks = workspace:FindFirstChild("Bricks")
 
@@ -164,7 +178,10 @@ local function startScan()
     end
 
     table.insert(conns, bricks.ChildAdded:Connect(function(f)
-        if not enabled then return end
+        if not enabled then
+            return
+        end
+
         watchPlayerFolder(f)
     end))
 end
@@ -214,6 +231,7 @@ do
             input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch
         ) then
+
             local delta = input.Position - dragStart
 
             frame.Position = UDim2.new(
@@ -227,4 +245,5 @@ do
 end
 
 refreshToggleVisual()
+
 print("I cracked Lucia every day")
