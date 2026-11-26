@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -8,8 +9,16 @@ local enabled = false
 local removedCount = 0
 local conns = {}
 
+local TARGETS = {
+    Field = true,
+    BV = true,
+    FieldWeld = true
+}
+
 local function getGuiParent()
-    local ok, cg = pcall(function() return CoreGui end)
+    local ok, cg = pcall(function()
+        return CoreGui
+    end)
     if ok and cg then return cg end
     return LP:WaitForChild("PlayerGui")
 end
@@ -28,6 +37,7 @@ frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 frame.BorderSizePixel = 0
 frame.Active = true
 frame.Parent = gui
+
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
 
 local stroke = Instance.new("UIStroke")
@@ -57,6 +67,7 @@ toggleBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
 toggleBtn.Text = "OFF"
 toggleBtn.AutoButtonColor = false
 toggleBtn.Parent = frame
+
 Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
 
 local countLabel = Instance.new("TextLabel")
@@ -78,36 +89,45 @@ local function refreshToggleVisual()
         toggleBtn.Text = "OFF"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(70, 30, 30)
     end
+
     countLabel.Text = "removed: " .. removedCount
 end
 
 local function bumpCount()
-    removedCount = removedCount + 1
+    removedCount += 1
     countLabel.Text = "removed: " .. removedCount
 end
 
-local function killField(field)
-    if field and field.Parent then
-        field:Destroy()
+local function killField(obj)
+    if obj and obj.Parent then
+        obj:Destroy()
         bumpCount()
     end
 end
 
 local function purgeDeep(root)
     for _, d in ipairs(root:GetDescendants()) do
-        if d.Name == "Field" then
+        if TARGETS[d.Name] then
             killField(d)
         end
     end
 end
 
 local function watchBrick(brick)
-    if not brick or not brick:IsA("Instance") then return end
-    if not brick:IsDescendantOf(workspace) then return end
+    if not brick or not brick:IsA("Instance") then
+        return
+    end
+
+    if not brick:IsDescendantOf(workspace) then
+        return
+    end
+
     purgeDeep(brick)
+
     table.insert(conns, brick.DescendantAdded:Connect(function(c)
         if not enabled then return end
-        if c.Name == "Field" then
+
+        if TARGETS[c.Name] then
             task.defer(killField, c)
         end
     end))
@@ -115,20 +135,22 @@ end
 
 local function watchPlayerFolder(folder)
     if not folder then return end
+
     for _, brick in ipairs(folder:GetChildren()) do
         watchBrick(brick)
     end
+
     table.insert(conns, folder.ChildAdded:Connect(function(b)
         if not enabled then return end
-        if b:IsA("Instance") then
-            watchBrick(b)
-        end
+        watchBrick(b)
     end))
 end
 
 local function startScan()
     if not enabled then return end
+
     local bricks = workspace:FindFirstChild("Bricks")
+
     if not bricks then
         table.insert(conns, workspace.ChildAdded:Connect(function(c)
             if c.Name == "Bricks" and enabled then
@@ -137,9 +159,11 @@ local function startScan()
         end))
         return
     end
+
     for _, folder in ipairs(bricks:GetChildren()) do
         watchPlayerFolder(folder)
     end
+
     table.insert(conns, bricks.ChildAdded:Connect(function(f)
         if not enabled then return end
         watchPlayerFolder(f)
@@ -148,14 +172,18 @@ end
 
 local function stopScan()
     for _, c in ipairs(conns) do
-        pcall(function() c:Disconnect() end)
+        pcall(function()
+            c:Disconnect()
+        end)
     end
+
     conns = {}
 end
 
 toggleBtn.MouseButton1Click:Connect(function()
     enabled = not enabled
     refreshToggleVisual()
+
     if enabled then
         startScan()
     else
@@ -165,12 +193,15 @@ end)
 
 do
     local dragging, dragStart, startPos
+
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
+
             dragging = true
             dragStart = input.Position
             startPos = frame.Position
+
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -178,13 +209,19 @@ do
             end)
         end
     end)
+
     UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch) then
+        if dragging and (
+            input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch
+        ) then
             local delta = input.Position - dragStart
+
             frame.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
             )
         end
     end)
