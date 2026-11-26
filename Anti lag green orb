@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -8,6 +7,7 @@ local LP = Players.LocalPlayer
 local enabled = false
 local removedCount = 0
 local conns = {}
+local watchedBricks = {}
 
 local TARGETS = {
     Field = true,
@@ -97,63 +97,54 @@ local function refreshToggleVisual()
     countLabel.Text = "removed: " .. removedCount
 end
 
-local function bumpCount()
-    removedCount += 1
-    countLabel.Text = "removed: " .. removedCount
-end
-
-local function killField(obj)
+local function killTarget(obj)
     if obj and obj.Parent then
         obj:Destroy()
-        bumpCount()
+        removedCount += 1
+        countLabel.Text = "removed: " .. removedCount
     end
 end
 
-local function purgeDeep(root)
-    for _, d in ipairs(root:GetDescendants()) do
-        if TARGETS[d.Name] then
-            killField(d)
+-- Direct children only
+local function removeTargets(brick)
+    for _, obj in ipairs(brick:GetChildren()) do
+        if TARGETS[obj.Name] then
+            killTarget(obj)
         end
     end
 end
 
+-- Watch each brick once
 local function watchBrick(brick)
-    if not brick or not brick:IsA("Instance") then
+    if watchedBricks[brick] then
         return
     end
 
-    if not brick:IsDescendantOf(workspace) then
-        return
-    end
+    watchedBricks[brick] = true
 
-    purgeDeep(brick)
+    removeTargets(brick)
 
-    table.insert(conns, brick.DescendantAdded:Connect(function(c)
+    table.insert(conns, brick.ChildAdded:Connect(function(obj)
         if not enabled then
             return
         end
 
-        if TARGETS[c.Name] then
-            killField(c)
+        if TARGETS[obj.Name] then
+            killTarget(obj)
         end
     end))
 end
 
+-- Watch player folders
 local function watchPlayerFolder(folder)
-    if not folder then
-        return
-    end
-
     for _, brick in ipairs(folder:GetChildren()) do
         watchBrick(brick)
     end
 
-    table.insert(conns, folder.ChildAdded:Connect(function(b)
-        if not enabled then
-            return
+    table.insert(conns, folder.ChildAdded:Connect(function(brick)
+        if enabled then
+            watchBrick(brick)
         end
-
-        watchBrick(b)
     end))
 end
 
@@ -165,8 +156,8 @@ local function startScan()
     local bricks = workspace:FindFirstChild("Bricks")
 
     if not bricks then
-        table.insert(conns, workspace.ChildAdded:Connect(function(c)
-            if c.Name == "Bricks" and enabled then
+        table.insert(conns, workspace.ChildAdded:Connect(function(obj)
+            if obj.Name == "Bricks" and enabled then
                 startScan()
             end
         end))
@@ -177,23 +168,23 @@ local function startScan()
         watchPlayerFolder(folder)
     end
 
-    table.insert(conns, bricks.ChildAdded:Connect(function(f)
-        if not enabled then
-            return
+    table.insert(conns, bricks.ChildAdded:Connect(function(folder)
+        if enabled then
+            watchPlayerFolder(folder)
         end
-
-        watchPlayerFolder(f)
     end))
 end
 
+-- Stop
 local function stopScan()
-    for _, c in ipairs(conns) do
+    for _, connection in ipairs(conns) do
         pcall(function()
-            c:Disconnect()
+            connection:Disconnect()
         end)
     end
 
     conns = {}
+    watchedBricks = {}
 end
 
 toggleBtn.MouseButton1Click:Connect(function()
@@ -208,7 +199,9 @@ toggleBtn.MouseButton1Click:Connect(function()
 end)
 
 do
-    local dragging, dragStart, startPos
+    local dragging = false
+    local dragStart
+    local startPos
 
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
